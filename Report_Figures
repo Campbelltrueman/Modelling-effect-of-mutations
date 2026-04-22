@@ -1,0 +1,195 @@
+#Figures combined
+#this book contains all of the code for figures used in the report/dissertation
+
+#note all of these will have the dependency of the main_code document, so this should be run first
+
+#figures 1 and 2 created by hand
+#Figure 3 was created in shiny app, which has seperate code seen in seperate file
+
+#Figure 4 for showing
+library(ggplot2)
+
+# Create x values
+x <- seq(0,2,length.out = 1000)
+
+# Gamma densities where we are using 36 and 3600 for rate and scale parameters
+y1 <- dgamma(x,shape = 36, rate = 36)
+y2 <- dgamma(x,shape = 3600, rate = 3600)
+
+# Creating the dataframe which can be used to combined data for ggplot2
+df <- data.frame(
+  x = rep(x, 2),
+  density = c(y1, y2),
+  group = factor(rep(c("Selectionist", "Neutralist"), each = length(x)))
+)
+
+# Plot
+ggplot(df, aes(x=x,y = density, color = group)) +
+  geom_line(size=1.2) +
+  scale_color_manual(values = c("Selectionist" = "red",
+                                "Neutralist" = "black")) +
+  labs(title = "Neutralist vs Selectionist Gamma",x = expression(delta),y = "Density",color = "Model") +
+  theme(plot.title = element_text(size = 18, face = "bold",hjust=0.5),legend.title = element_text(size = 14),legend.text = element_text(size = 12)
+  ) + theme(axis.title.x = element_text(size = 16),axis.title.y = element_text(size = 16))
+
+
+#figures 5 and 6 also created in shiny app as a snapshot of the shiny app
+
+####################################################################
+
+
+#Figure 7 is the discretisation error vs K.
+
+
+pi_truth_value <- average_pi_dummy(N=100, mu_rb=0.001, mu_br=0.001, phi_R=1, phi_B=1.01,
+                                   alpha=36, beta=36, S=500000)
+
+#Comparing against the discretised with different number of bins going from 5 to 200
+k_values <- seq(5, 200, by=5)  #going in sets of 5
+
+d_errors <- sapply(k_values,function(k) { #vectorizing this
+  pi_disc <- average_pi_discretized(N=100, mu_rb=0.001, mu_br=0.001, phi_R=1, phi_B=1.01,
+                                    alpha=36, beta=36, K=k)
+
+  sum(abs(pi_disc - pi_truth_value)) }) #looking at the error here
+
+
+#doing this in ggplot now, we will plot on log scale
+data_frame <- data.frame(K=k_values,errors=d_errors)
+
+ggplot(data_frame,aes(x=K,y=errors)) + geom_line() + geom_point() + scale_y_log10() + labs(title="discretisation error vs. K", x="Number of bins",y="Discretisation error (log scale)") +theme(plot.title=element_text(hjust=0.5,size=18,face="bold"),axis.title=element_text(size=15,face="bold"))
+
+
+
+
+#Table 1: where we compare the simulation based method and discretisation method
+set.seed("123")
+dummytime <-mean(replicate(100,system.time(dummyres <-average_pi_dummy(N=100,mu_rb=0.001,mu_br=0.001,phi_R=1.01,phi_B=1,alpha=36,beta=36,S=10000) )[3]),trim=0.05)
+
+#looking at the average elapsed time for 95 out of 100 draws for the discretized time
+discretized_time <- mean(replicate(100,system.time(average_pi_discretized(N=100,mu_rb=0.001,mu_br=0.001,phi_R=1.01,phi_B=1,alpha=36,beta=36,K=40) )[3]),trim=0.05)
+
+print(dummytime)
+print(discretized_time)
+
+
+#Table 2:
+#checking error of discretised and the simulation based approach here
+check1 <-average_pi_discretized(N=100,mu_rb=0.001,mu_br=0.001,phi_R=1.01,phi_B=1.01,alpha=36,beta=36,K=40)
+
+sum(check1)
+var(check1)
+check2 <-average_pi_dummy(N=100,mu_rb=0.001,mu_br=0.001,phi_R=1.01,phi_B=1,alpha=36,beta=36,S=10000)
+sum(check2)
+var(check2)
+
+0.5*sum(abs(check1-check2))
+#this gives us the L1 distance here
+
+
+#######################################################################################################
+
+#figure 8:
+
+#To test an upper value of alpha we will create a graph of alpha versus the discretized values, to see when we can't tell a difference
+alpha_value <- seq(from=1,to=10000,by=100)
+alpha_value
+discretization_values <- matrix(NA,nrow=length(alpha_value),ncol=40)
+#we are going to compare different values of alpha and calculate the gamma distribution for each of the 40 bins for this alpha
+par(mfrow=c(1,1))
+for(i in 1:length(alpha_value)){
+
+  discretization_values[i,] <-discrete_gamma(alpha_value[i],alpha_value[i],40)
+}
+library(latex2exp)
+matplot(alpha_value,discretization_values,type="l",lty=1,log="x",xlab=TeX("$\\alpha$"),ylab=TeX("$\\delta_k$"),main=TeX("Discretised Gamma distribution for varying $\\alpha$"),cex.lab=1.2)
+
+#doing this in ggplot2 so that all the figures are done here
+library(tidyr)
+df2 <- as.data.frame(discretization_values)
+df2$alpha <- alpha_value
+
+df_long_format <- pivot_longer(df2,cols = -alpha,names_to = "k",values_to = "delta_k")
+ggplot(df_long_format,aes(x = alpha, y = delta_k, group = k, colour = k)) + geom_line() + scale_x_log10() +
+  labs(x = expression(alpha),y = expression(delta[k]),title = expression("Effect of "* alpha *" on the discretised Gamma distribution")) +
+  theme(legend.position="none",plot.title = element_text(size = 18, face = "bold",hjust=0.5), axis.title.x = element_text(size = 16,face="bold"),axis.title.y = element_text(size = 16,face="bold"))
+
+
+########################################################################################################
+
+#now we are going to do the ABC plot figures, note the actual results for alpha=36 and 3600 can be seen in the main code document
+
+
+
+#Figures 9,10 and 12:
+#Here we are doing the ABC plotting both the density and traceplots
+
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(patchwork)
+
+ABC_combined_plot <- function(ABC__result, true_vals){
+
+  colnames(ABC__result) <- c("mu_R","mu_B","alpha","beta","phi_B","phi_R")
+  #not looking at beta and phi_B here so simplifying this
+  params <- c("mu_R","mu_B","alpha","phi_R")
+  latex_names <- c("mu_R" =  TeX('$\\mu_{BR}$'),
+                   "mu_B" =  TeX('$\\mu_{RB}$'),
+                   "alpha" = TeX('$\\alpha$'),
+                   "phi_R" = TeX('$\\phi_R$'))
+
+
+  #instead of doing all of the plots seperately, lets group together so can do them all at the same time
+  df <- ABC__result %>%
+    mutate(iter = 1:n()) %>%select(iter, all_of(params)) %>%
+    pivot_longer(-iter,names_to="param",values_to="value")
+  #need to create a data frame to put in all of the data, this requires quite a complicated grouping
+  df <- df %>%group_by(param) %>% mutate(run_mean = cumsum(value)/iter)
+  truth_df <- data.frame(param = params,truth = true_vals)
+
+  # densityplots
+  dens <- ggplot(df, aes(value)) +geom_histogram(bins=20,color="black",fill="blue") +geom_vline(data = truth_df,
+                                                                                                aes(xintercept = truth,linetype="True value"),
+                                                                                                colour="red",linewidth=1.2) +facet_wrap(~param,ncol=1,scales="free",labeller = as_labeller(function(x) latex_names[x], default = label_parsed)) +labs(x="parameter value", y="count", linetype="") +ggtitle("Density plots")+theme(plot.title=element_text(hjust=0.5,size=16,face="bold"),strip.text = element_text(size = 14),legend.position="none",
+                                                                                                                                                                                                                                                                                                                                   axis.text=element_text(size=12),axis.title=element_text(size=13))
+
+  #also showing the trace plots
+  trace <- ggplot(df, aes(iter, run_mean)) +
+    geom_line() +geom_hline(data = truth_df,aes(yintercept = truth,linetype="True value"),
+                            colour="red",linewidth=1.2) +facet_wrap(~param, ncol=1, scales="free",labeller=as_labeller(function(x)latex_names[x], default = label_parsed)) +labs(x="accepted iteration number",
+                                                                                                                                                                                 y="running mean",linetype="")+ggtitle("Trace plots")+theme(plot.title=element_text(hjust=0.5,size=16,face="bold"),strip.text =element_text(size=14),axis.text=element_text(size=12),axis.title=element_text(size=13),legend.text=element_text(size=11),legend.title=element_text(size=12))
+  #showing them both at the same time as two separate columns
+  dens|trace
+
+}
+
+
+ABC_combined_plot(alpha36,true_vals=c(0.001,0.001,36,1.01))
+ABC_combined_plot(ABC_result3600_large_prior,true_vals=c(0.001,0.001,3600,1.01))
+ABC_combined_plot(ABC_resulthypergeometric_discretized_result_36,true_vals=c(0.001,0.001,36,1.01))
+
+######################################################################################
+
+#Finally doing Figure 11, which shows how the average stationary distribution changes over time
+
+
+
+stat_distr_vals <- numeric(length=length(alpha_values))
+for(i in 1:length(alpha_value)){
+  stat_distr_vals[i] <-average_pi_discretized(N=100, mu_rb=0.001,mu_br=0.001,phi_R=1.01,phi_B=1,alpha=alpha_value[i],beta=alpha_value[i],K=40)
+}
+stat_distr_vals
+
+#if we plot alpha versus the stationary distribution value where we differ alpha by 100 each time, then we can see at what point we are basically getting the same value
+
+library(ggplot2)
+#create the data frame to allow us to combine the data into one graph
+df <- data.frame(alpha=alpha_value,stat_distribution=stat_distr_vals)
+
+
+
+#plotting we get this result, which we analyse as part of the report
+ggplot(df,aes(x=alpha,y=stat_distribution)) + geom_line(size=1)+geom_point(size=2) + scale_x_log10() + labs(title=TeX("\\textbf{Convergence of Stationary Distribution for increasing $\\alpha$}"), x=TeX("$\\alpha$"),y="Average stationary distribution") +
+  theme(plot.title=element_text(hjust=0.6,size=14,face="bold"))
