@@ -95,7 +95,7 @@ statespacesim <- function(N,phi_B, phi_R,d,T,init,mu_R,mu_B){
 
     if (n < N & n>1){ #(n,B)
 
-      plus1 <- (((N-n)/N) * n * phi_B * d )/(n*phi_B *d + (N-n) * phi_R)
+      plus1 <- (((N-n)/N) * n * phi_B * d )/(n*phi_B*d + (N-n) * phi_R)
       neg1 <- (n * (N-n)/N * phi_R)/ (( n*phi_B * d ) + (N-n) * phi_R)
       S[i] <- sample(c(n-1,n+1,n),size=1,prob=c(neg1,plus1,(1-neg1-plus1)))
       Newmatrix[i,S[i]] <- 1
@@ -105,7 +105,7 @@ statespacesim <- function(N,phi_B, phi_R,d,T,init,mu_R,mu_B){
       Newmatrix[i,S[i]] <- 1
     }
     if (n > N & n < 2*N){ #(n,R)
-      m <- n %% N #getting the modulus value
+      m <- n %% N #getting the modulus value, the number of red alleles here
       plus1 <- ((N-m)*m/N * phi_R * d )/((m*phi_R *d) + (N-m) * phi_B)
       neg1 <- (m* (N-m)/N * phi_B)/(m * phi_R * d + (N-m)*phi_B)
       S[i] <- sample(c(n-1,n+1,n),size=1,prob=c(neg1,plus1,(1-neg1-plus1)))
@@ -164,7 +164,7 @@ statespacesim(N=20,phi_B=1, phi_R=1.11,d=1.1,T=10000,init=2,mu_R=0.005,mu_B=0.00
 
 
 #we first create a theoretical stationary distribution using the transition probabilities, this will be useful to confirm the stationary distribution
-#worked out by Zac in thesis works as expected
+
 
 
 #Inputs:
@@ -187,13 +187,12 @@ theoretical_stat_distr <- function(N,phi_B,phi_R,d,mu_B,mu_R){
       P[i,1] <- mu_B
 
     }
-    else if (i ==1){ #need to check what happens if N=1 or N=2 in this case and if this still works
+    else if (i ==1){
       plus1 <- (((N-i)/N) * i * phi_B * d )/(i*phi_B *d + (N-i) * phi_R)
       neg1 <- (i * (N-i)/N * phi_R)/ (( i*phi_B * d ) + (N-i)* phi_R)
       P[i,i+1] <- plus1
       P[i,2*N] <- neg1
       P[i,i] <- (1-plus1-neg1)
-
     }
 
     #now that we've done the base cases can just do the rest of the cases
@@ -462,8 +461,9 @@ psi_n <- function(average_pi_result){
   psi <- numeric(N + 1)
   psi[1] <- average_pi_result[2*N]  #psi_0 #ie monomorphic red
   psi[N+1] <- average_pi_result[N] #psi_N #i.e. monomorphic blue
+
   for(i in 1:(N-1)){
-    psi[i+1] <- average_pi_result[i] + average_pi_result[(2*N)-i] #this is equivalent to pi_(n,2) + pi_(N-n,1)
+    psi[i+1] <- average_pi_result[i] + average_pi_result[(2*N)-i] #this is equivalent to pi_(n,R) + pi_(n,B)
   }
   return(psi)
 }
@@ -759,54 +759,6 @@ ABC_simulation_discretized_hyper <- function(N, M,epsilon, I, mu_rb_true,mu_br_t
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-###########################################################################
-N_validate <- 100
-mu_validate <- 1/(2*N_validate) #don't want too low of a value of mu here, otherwise this would/could lead to identifiability issues
-#mu_validate <- 0.01/(2*N_validate)
-#need to check what should do to compare the two mu values here, as currently just making them the same
-#also should the priors not be something nearer to this value for this
-
-sigma_validate <- 0.5/(2*N_validate)
-sigma_validate
-
-phi_R_validate <- 1 #keeping it fixed at 1
-phi_B_validate <- 1 + sigma_validate
-
-f_validate <- c(1,10,100)
-
-#choosing different values here
-
-
-alpha_validate = (36*(N_validate)**2)/(f_validate)**2
-alpha_validate
-
-
-beta_validate <- alpha_validate #making them the same value for this
-Var_delta_validate <- 1/alpha_validate
-
-
-
-######################################################################
-#First analysis we are doing is just checking that works for some values
-
-
 ABC_simulation_discretized <- function(N, epsilon, I, mu_rb_true,mu_br_true,phi_R_true,phi_B_true,alpha_true,beta_true,K){
   #Approximate Bayesian Computation for our mutations simulator
   #INPUTS:
@@ -824,11 +776,11 @@ ABC_simulation_discretized <- function(N, epsilon, I, mu_rb_true,mu_br_true,phi_
     mu_rb_sim <- rexp(1,rate=1/0.001)
     mu_br_sim <- rexp(1,rate=1/0.001)
     #want to make sure these mu values are between 0 and 1
-    beta_sim <- runif(1,1,50)
+    beta_sim <- runif(1,1,5000)
     alpha_sim <- beta_sim #keeping alpha=beta for identifiability
     #could make these alpha and beta equal to each other
     phi_B_sim <- 1
-    phi_R_sim <- runif(1,0.8,1.2)
+    phi_R_sim <- runif(1,0.9,1.1)
     pi_bar <- average_pi_discretized(N=N, mu_rb=mu_rb_sim, mu_br=mu_br_sim, phi_B=phi_B_sim,phi_R=phi_R_sim,alpha=alpha_sim,beta=beta_sim,K=K)
     e <- sum(abs(pi_bar - pi_true))
     if (any(is.na(pi_bar))) next #ignore if any of the values is NA
@@ -842,148 +794,5 @@ ABC_simulation_discretized <- function(N, epsilon, I, mu_rb_true,mu_br_true,phi_
   return(matrix_results)
 }
 
-#doing for extremely large number of iterations to see if can work out based on this approach
-ABC_resultdiscretized_result_5 <-ABC_simulation_discretized(N=100, epsilon=0.04,I=10000000,mu_rb_true=0.001,mu_br_true=0.001,phi_B_true=1,phi_R_true=1.01,alpha_true=5,beta_true=5,K=40)
-ABC_resultdiscretized_result_5
-
-ABC_plotter(ABC_resultdiscretized_result_75)
-save(ABC_resultdiscretized_result_5,file="alpha=5")
-ABC_converge_checker2(ABC_resultdiscretized_result_75)
-
-#note have labelled here 10, but this is actually alpha =15
-ABC_resultdiscretized_result_15 <-ABC_simulation_discretized(N=100, epsilon=0.04,I=10000000,mu_rb_true=0.001,mu_br_true=0.001,phi_B_true=1,phi_R_true=1.01,alpha_true=15,beta_true=15,K=40)
-ABC_resultdiscretized_result_15
-saveRDS(ABC_resultdiscretized_result_15,file="alpha=15.rds")
-#OK the system does seem to work but we basically have that the system doesn't give many values, as we are trying to infer so many values
-#I guess the next steps is to try to do this for maybe 10 different values of alpha and see if it can do convergence for each of these
-#might need to make it that there is 10 times the number of iterations as the previously,
-#dont really want to increase the epsilon as otherwise not really getting convergence here
-
-#setting up this system, we will do:
-
-
-
-
-
-#changing this partly to allow us to do very small alpha/beta values here
-
-ABC_simulation_discretized2 <- function(N, epsilon, I, mu_rb_true,mu_br_true,phi_R_true,phi_B_true,alpha_true,beta_true,K){
-  #Approximate Bayesian Computation for our mutations simulator
-  #INPUTS:
-  #Epsilon: real number greater than zero which we use in ABC to define error value
-  #I: number of iterations we want to do for ABC
-  #true_values: values which have our true values of muR, muB, phiB, phiR, alpha, beta, should do all the same checks for these values
-  #S: number of iterations for our average pi simulation
-
-  #want to keep a matrix of all the values that doesn't have a set size
-  matrix_results <- matrix(nrow=6)
-
-  pi_true <- average_pi_discretized(N=N,mu_rb=mu_rb_true, mu_br=mu_br_true, phi_B=phi_B_true, phi_R=phi_R_true,alpha=alpha_true,beta=beta_true,K=K)
-
-  for (i in 1:I){
-    mu_rb_sim <- rexp(1,rate=1/0.001)
-    mu_br_sim <- rexp(1,rate=1/0.001)
-    #want to make sure these mu values are between 0 and 1
-    beta_sim <- runif(1,0.000001,100)
-    alpha_sim <- beta_sim #keeping alpha=beta for identifiability
-    #could make these alpha and beta equal to each other
-    phi_B_sim <- 1
-    phi_R_sim <- runif(1,0.9,1.1) #unlikely to be much higher or lower than this
-    pi_bar <- average_pi_discretized(N=N, mu_rb=mu_rb_sim, mu_br=mu_br_sim, phi_B=phi_B_sim,phi_R=phi_R_sim,alpha=alpha_sim,beta=beta_sim,K=K)
-    e <- sum(abs(pi_bar - pi_true))
-    if (any(is.na(pi_bar))) next #ignore if any of the values is NA
-    if (e < epsilon){
-      #results_list <- cbind(matrix_results,c(mu_R_sim,mu_B_sim,alpha_sim,beta_sim,phi_B_sim,phi_R_sim))
-      matrix_results <- cbind(matrix_results,c(mu_rb_sim,mu_br_sim,alpha_sim,beta_sim,phi_B_sim,phi_R_sim))
-    }
-
-  }
-  matrix_results <- as.data.frame(t(matrix_results[,-1])) #getting rid of the first NA column
-  return(matrix_results)
-}
-
-
-
-ABC_resultdiscretized_result_75 <-ABC_simulation_discretized2(N=100, epsilon=0.04,I=10000000,mu_rb_true=0.001,mu_br_true=0.001,phi_B_true=1,phi_R_true=1.01,alpha_true=75,beta_true=75,K=40)
-save(ABC_resultdiscretized_result_75,file="alpha=75")
-
-ABC_resultdiscretized_result_0point5 <- ABC_resultdiscretized_result2 <-ABC_simulation_discretized(N=100, epsilon=0.04,I=10000000,mu_rb_true=0.001,mu_br_true=0.001,phi_B_true=1,phi_R_true=1.01,alpha_true=0.5,beta_true=0.5,K=40)
-save(ABC_resultdiscretized_result_0point5,file="alpha=0.5")
-
-
-ABC_resultdiscretized_result_0point5
-ABC_resultdiscretized_result_75
-
-save75 <- as.data.frame(ABC_resultdiscretized_result_75)
-save(save75,file="alpha=75_test")
-saveRDS(save75, file = "alpha_75_test.rds")
-saveRDS(ABC_resultdiscretized_result_0point5, file = "alpha_0.5_test.rds")
-saveRDS(ABC_resultdiscretized_result_5,file="alpha_5.rds")
-
-
-
-ABC_plotter(ABC_resultdiscretized_result_75)
-
-ABC_converge_checker2(ABC_resultdiscretized_result_36)
-
-###########################################################################################
-
-#To test an upper value of alpha we will create a graph of alpha versus the discretized values, to see when we can't tell a difference
-alpha_value <- seq(from=1,to=10000,by=100)
-alpha_value
-discretization_values <- matrix(NA,nrow=length(alpha_value),ncol=40)
-
-par(mfrow=c(1,1))
-for(i in 1:length(alpha_value)){
-
-discretization_values[i,] <-discrete_gamma(alpha_value[i],alpha_value[i],40)
-}
-matplot(alpha_value,discretization_values,type="l",lty=1,log="x",xlab="alpha",ylab="delta_k",main="alpha versus 40 discretized values")
-
-
-
-average_pi_discretized <- function(N, mu_rb, mu_br, phi_R, phi_B,alpha,beta,K){
-  dis_res <- discrete_gamma(alpha,beta,K)
-  Total <- rep(0,times=(2*N))
-  S <- length(dis_res)
-  for (sim in 1:S){
-    delta <- dis_res[sim]
-    Total <- Total + stationary_distr2(N,phi_B=phi_B, phi_R=phi_R,d=delta,mu_rb=mu_rb,mu_br=mu_br)
-  }
-  return(Total/S)
-}
-
-stat_distr_vals <- numeric(length=length(alpha_values))
-for(i in 1:length(alpha_value)){
-  stat_distr_vals[i] <-average_pi_discretized(N=100, mu_rb=0.001,mu_br=0.001,phi_R=1.01,phi_B=1,alpha=alpha_value[i],beta=alpha_value[i],K=40)
-}
-stat_distr_vals
-
-#if we plot alpha versus the stationary distribution value where we differ alpha by 100 each time, then we can see at what point we are basically getting the same value
-
-
-plot(alpha_value,stat_distr_vals,log="x",xlab="alpha",ylab="average stationary distribution value",main="average stationary distribution for different alpha with mutation rate =0.0001")
-
-#if we want our epsilon to be a reasonable value, so that we don't have too many iterations, lets look at only when stationary distributions are 0.0001 different for every 100 values
-
-#will add a line, to show when there is this small of a difference between alpha values of 100
-#we can see here that
-
-
-#can see if we were to do this for even lower values of mutation rates, then we get even lower differences in the stationary distribution
-
-#can now look at actually plotting the differences between the stationary distribution values for these alpha, to show this more clearly.
-differences_statdistr <- numeric(length=length(stat_distr_vals)-1)
-
-for(i in 2: length(stat_distr_vals)){
-  differences_statdistr[i] <- stat_distr_vals[i]-stat_distr_vals[i-1]
-}
-differences_statdistr
-
-plot(x=alpha_value[-1],y=differences_statdistr[-1],xlab="alpha",ylab="difference in average stationary distribution",main="differences in stationary distribution for alpha versus alpha-100")
-#can see the difference between stationary distributions as you increase alpha have very small differences.
-#this effect is multiplied when you have
-
-#####################################################################################################
 
 
