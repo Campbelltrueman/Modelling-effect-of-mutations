@@ -1,0 +1,237 @@
+#instead of a normal simulation here, we will instead set a seed, and take a random value.
+#this means that we can visualise the difference when we look at different parameter values
+#rather than them just being different every time
+
+#uploading the shiny app online
+
+
+
+
+library(shiny)
+
+
+
+#first define the state space simulation
+statespacesim <- function(N, phi_B, phi_R, delta, T, init, mu_R, mu_B, u = NULL, seed = NULL){
+  d <- delta #make more clear what d refers to
+  if (N <= 0 || N != as.integer(N)) stop("Population size must be a positive integer")
+  if (phi_B < 0 || phi_R < 0) stop("both phi values should be non-negative")
+  if (mu_R < 0 || mu_R > 1) stop("mu_R should be between 0 and 1")
+  if (mu_B < 0 || mu_B > 1) stop("mu_B should be between 0 and 1")
+  if (T <= 0 || T != as.integer(T)) stop("T should be a positive integer")
+  if (init < 1 || init != as.integer(init) || init > (2 * N)) stop("initial value should be an integer between 1 and 2N")
+
+  if (is.null(u)) { #setting effectively two seeds here, one to give us same value every time, and one for demonstration
+    #so that we can visualise the difference when we alter one parameter
+    if (!is.null(seed)) set.seed(seed)
+    u <- runif(T - 1) #for demonstration to show difference between parameter values.  We set T-1 values, meaning
+    #we have a preset automatic sample value each time we sample
+  }
+
+
+  S <- integer(T)
+  colour_value <- character(T) #adding colour to our graphing
+  Newmatrix <- matrix(0, nrow = T, ncol = 2 * N)
+
+  S[1] <- init
+  Newmatrix[1, init] <- 1
+
+  for (i in 2:T) {
+    n <- S[i-1]
+    ui <- u[i-1]
+
+    if (n == 1) {
+      plus1 <- (((N-n) /N) * n * phi_B * d) / (n*phi_B *d + (N -n) *phi_R)
+      neg1  <- (n*(N-n) / N * phi_R)/(n * phi_B * d + (N-n)*phi_R)
+
+      if (ui < neg1) {
+        S[i] <- 2 * N
+      } else if (ui < neg1 + plus1) {
+        S[i] <- n+1
+      } else {
+        S[i] <- n
+      }
+    }
+    if (n < N && n > 1) {
+      plus1 <- (((N - n) / N) * n * phi_B * d) / (n * phi_B * d + (N - n) * phi_R)
+      neg1  <- (n * (N - n) / N * phi_R) / (n * phi_B * d + (N - n) * phi_R)
+
+      if (ui < neg1) {
+        S[i] <- n-1
+      } else if (ui < neg1 + plus1) {
+        S[i] <- n+1
+      } else {
+        S[i] <- n
+      }
+    }
+    if (n == N) {
+      if (ui < (1 -mu_R)) {
+        S[i] <- N
+      } else {
+        S[i] <- N+1
+      }
+    }
+    if (n > N && n < 2 * N) {
+      m <- n %% N
+      if (m == 0) m <- N
+
+      plus1 <- ((N-m) * m / N * phi_R * d) / ((m * phi_R * d) + (N - m) * phi_B)
+      neg1  <- (m * (N - m) / N * phi_B) / (m * phi_R * d + (N - m) * phi_B)
+
+      if (ui < neg1) {
+        S[i] <- n - 1
+      } else if (ui < neg1 + plus1) {
+        S[i] <- n+1
+      } else {
+        S[i] <- n
+      }}
+
+    if (n == 2 * N) {
+      if (ui < (1 - mu_B)) {
+        S[i] <- 2 * N
+      } else {
+        S[i] <- 1
+      }
+    }
+
+    Newmatrix[i, S[i]] <- 1
+  }
+
+  n_list <- numeric(T)
+
+  for (i in 1:T) {
+    n_values <- S[i] %% N
+    n_values <- ifelse(n_values == 0, N, n_values)
+    n_list[i] <- n_values
+    colour_value[i] <- ifelse(S[i] <= N, "blue", "red")
+  }
+
+  blue_values <- n_list
+  red_values <- n_list
+  blue_values[colour_value != "blue"] <- NA
+  red_values[colour_value != "red"] <- NA
+
+  list(S = S,Newmatrix = Newmatrix,n_list = n_list,blue_values = blue_values,
+    red_values = red_values,u = u)
+}
+
+
+#creating second graph to show how the stationary distribution changes
+#this isn't random here
+stationary_distr2 <- function(N, phi_B,phi_R,d, mu_rb,mu_br){
+  P <- numeric(2*N)
+  #have to have two cases to make sure no NA values occur
+  if (phi_B* d != phi_R && phi_B != phi_R*d){
+
+    P[(2*N)] <- mu_br*(phi_R)**(N-1) *((phi_B * d)**N - (phi_R)**N) / ((phi_B * d) - phi_R)
+    P[(N)] <- mu_rb*(phi_B)**(N-1) *((phi_R * d)**N - (phi_B)**N)/ ((phi_R * d) - phi_B)
+
+    i<- 1:(N-1)#if most recent mutation is blue (indexing for vectorization)
+
+    #splitting into sections to improve readability
+    P[i] <- (mu_rb * mu_br * (N/i)) * #first part
+      ((((N-i)*phi_R) + (i*phi_B*d))/(N-i)) * #second part
+      (((phi_B * d)**(N-i) - (phi_R)**(N-i))/((phi_B*d)- phi_R)) * #third part
+      (((phi_R)**(N-1) * (phi_B *d)**(i-1))) #fourth part
+
+
+    index_red <- (N+1):(2*N-1)  #if most recent mutation is red
+    m <- 2*N - index_red  #we are doing 2N-i since still counting the number of blue organisms, so it will decrease from here by 1 for every value of i
+
+
+    P[index_red] <- (mu_rb * mu_br * (N/m)) * #first part
+      ((((N-m)*phi_R*d) + (m*phi_B))/(N-m)) * #second part
+      (((phi_R * d)**(m) - (phi_B)**(m))/((phi_R*d)- phi_B)) * #third part
+      (((phi_B)**(N-1) * (phi_R *d)**(N-1-m))) #fourth part
+
+  }
+
+  else{ #if the boundary cases occur
+    P[(2*N)] <- N*mu_br*phi_R**(2*N-2)
+    P[(N)] <- N*mu_rb * phi_B**(2*N-2)
+    i <- 1:(N-1) #vectorized indexing
+    #if most recent mutation is blue
+
+    P[i] <- ((N-i) * mu_rb *mu_br *(N/i)) *
+      (((N-i)*phi_R + i*phi_B*d)/(N-i)) *
+      (phi_R**(2*N-i-2)) *
+      ((phi_B*d)**(N-i-1))
+
+
+    index_red <- (N+1):(2*N-1) #this refers to the s= (N-n, 1) #i.e if most recent mutation is red
+    m <- 2*N - index_red #we are doing 2N-i since still counting the number of blue organisms, so it will decrease from here by 1 for every value of index_red
+
+    P[index_red] <- (m * mu_rb * mu_br * (N/m)) *
+      ((((N-m)*phi_R*d) +m*phi_B)/(N-m)) *
+      (phi_B**(N+m-2)) *
+      ((phi_R*d)**(N-m-1))
+
+  }
+
+  return(P/sum(P))}
+
+ui <- fluidPage(
+  withMathJax(), #allowing us to get latex in our sidebar
+  titlePanel("State Space Simulation"),sidebarLayout(sidebarPanel(width=3,
+    #starting values for our parameters
+    numericInput("N", "N", value = 20, min = 1, step = 1),
+    numericInput("phi_B", HTML("$$\\phi_B$$"), value = 1),
+    numericInput("phi_R", HTML("$$\\phi_R$$"), value = 1),
+    numericInput("delta", HTML("$$\\delta$$"), value = 1),
+    numericInput("T", "T (number of time steps)", value = 10000, min = 1, step = 1),
+    numericInput("init", "Initial state (1,...,2N)", value = 2, min = 1, step = 1),
+    numericInput("mu_R", HTML("$$\\mu_{BR}$$"), value = 0.001, min = 0, max = 1, step = 0.001),
+    numericInput("mu_B", HTML("$$\\mu_{RB}$$"), value = 0.001, min = 0, max = 1, step = 0.001),
+    numericInput("seed", "Random seed", value = 123, min = 1, step = 1),
+    actionButton("run", "Run simulation")),mainPanel(width=9,plotOutput("simPlot", height = "400px"),plotOutput("stationaryPlot", height = "400px"),verbatimTextOutput("simSummary"))))
+
+
+server <- function(input, output, session) {
+  #stationary distribution plot part
+  stationary_data <- eventReactive(input$run, {
+
+    stationary_distr2(
+      N = as.integer(input$N),phi_B = input$phi_B,
+      phi_R = input$phi_R,d = input$delta,
+      mu_rb = input$mu_R, #change the naming so that can be used together
+      mu_br = input$mu_B
+    )
+
+  })
+
+  sim_data <- eventReactive(input$run, {
+    req(input$init <= 2 * input$N) #checking condition here, that starting value is fine
+    statespacesim(
+      N = as.integer(input$N),phi_B = input$phi_B,phi_R = input$phi_R,delta = input$delta,
+      T = as.integer(input$T),init = as.integer(input$init),mu_R = input$mu_R,mu_B = input$mu_B,seed = as.integer(input$seed))
+  })
+  #graph data
+  output$simPlot <- renderPlot({sim <- sim_data()
+  plot(seq_along(sim$n_list), sim$n_list,type = "n",xlab = "Time step",ylab = "number of focal allele",ylim = c(1, input$N),main = "State space simulation",
+       cex.main=1.8,cex.lab=1.4,cex.axis=1.2,font.main=2,font.lab=2)
+  lines(seq_along(sim$blue_values), sim$blue_values, type = "s", col = "blue")
+  lines(seq_along(sim$red_values), sim$red_values, type = "s", col = "red")
+  #legend("topright",legend=c("Blue allele","Red allele"),col=c("blue","red"),lty=1,lwd=2,bty="n")
+  })
+  output$stationaryPlot <- renderPlot({
+    P <- stationary_data()
+    states <- 1:length(P)
+    blue_labels <- paste0("(", 1:(input$N), ",B)")
+    red_labels  <- paste0("(",((input$N)-1):0, ",R)")
+
+    state_labels <- c(blue_labels, red_labels)
+
+    barplot1 <-barplot(P,col = c(rep("blue", input$N),rep("red", input$N)),
+            xlab = "",ylab = "Stationary probability",main = "Stationary distribution",
+            cex.main=1.6,cex.lab=1.4,cex.axis=1.1,font.main=2,font.lab=2,names.arg = rep("", length(P)))
+
+  axis(1, at = barplot1[seq(1, length(barplot1), by = 3)],
+       labels = state_labels[seq(1, length(state_labels), by = 3)],
+       las = 2, cex.axis = 1.2)
+  title(xlab="State (allele count,type)",line=4.2,cex.lab=1.3,font.lab=2)
+  })
+  output$simSummary <- renderPrint({
+    sim <- sim_data()
+  })
+}
+shinyApp(ui, server)
